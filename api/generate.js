@@ -1,29 +1,25 @@
-const fetch = (...args) => import('node-fetch').then(({ default: f }) => f(...args));
+// Node 18+ 内建 fetch / FormData / Blob，无需 node-fetch
 
 const PROMPTS = [
   {
     label: 'A',
     title: '主体位置调整版',
-    prompt:
-      '参考图 1，基于图 1 做同风格微改创作。保留产品主体外观、包装设计、Logo/文字/图案、颜色材质比例轮廓不变，不拉伸变形，保留商业摄影质感。调整方向：将产品移到新的画面位置（如从中央移到左三分之一或右侧），保留整体场景风格和色彩体系，重新设计背景空间关系。高级、干净、真实，适合电商主图，photorealistic, commercial product photography, sharp focus, realistic lighting, premium e-commerce image',
+    prompt: '参考图 1，基于图 1 做同风格微改创作。保留产品主体外观、包装设计、Logo/文字/图案、颜色材质比例轮廓不变，不拉伸变形，保留商业摄影质感。调整方向：将产品移到新的画面位置（如从中央移到左三分之一或右侧），保留整体场景风格和色彩体系，重新设计背景空间关系。高级、干净、真实，适合电商主图，photorealistic, commercial product photography, sharp focus, realistic lighting, premium e-commerce image',
   },
   {
     label: 'B',
     title: '道具重组版',
-    prompt:
-      '参考图 1，基于图 1 做同风格微改创作。保留产品主体外观、包装设计、Logo/文字/图案、颜色材质比例轮廓不变，不拉伸变形，保留商业摄影质感。调整方向：重新安排画面中的道具组合与前后景关系，替换或重组装饰元素，改变画面层次感，让构图更丰富但风格一致。高级、干净、真实，photorealistic, commercial product photography, sharp focus, realistic lighting, premium e-commerce image',
+    prompt: '参考图 1，基于图 1 做同风格微改创作。保留产品主体外观、包装设计、Logo/文字/图案、颜色材质比例轮廓不变，不拉伸变形，保留商业摄影质感。调整方向：重新安排画面中的道具组合与前后景关系，替换或重组装饰元素，改变画面层次感，让构图更丰富但风格一致。高级、干净、真实，photorealistic, commercial product photography, sharp focus, realistic lighting, premium e-commerce image',
   },
   {
     label: 'C',
     title: '镜头变化版',
-    prompt:
-      '参考图 1，基于图 1 做同风格微改创作。保留产品主体外观、包装设计、Logo/文字/图案、颜色材质比例轮廓不变，不拉伸变形，保留商业摄影质感。调整方向：改变拍摄机位和构图方式，如从正面改为略带俯角或侧角，形成新的视觉重心和透视感，使画面更有张力。高级、干净、真实，photorealistic, commercial product photography, sharp focus, realistic lighting, premium e-commerce image',
+    prompt: '参考图 1，基于图 1 做同风格微改创作。保留产品主体外观、包装设计、Logo/文字/图案、颜色材质比例轮廓不变，不拉伸变形，保留商业摄影质感。调整方向：改变拍摄机位和构图方式，如从正面改为略带俯角或侧角，形成新的视觉重心和透视感，使画面更有张力。高级、干净、真实，photorealistic, commercial product photography, sharp focus, realistic lighting, premium e-commerce image',
   },
   {
     label: 'D',
     title: '光影变化版',
-    prompt:
-      '参考图 1，基于图 1 做同风格微改创作。保留产品主体外观、包装设计、Logo/文字/图案、颜色材质比例轮廓不变，不拉伸变形，保留商业摄影质感。调整方向：保留原图审美方向，但改变光线方向、阴影关系和背景细节，如将侧光改为顶光或逆光，调整阴影落点，营造不同氛围感。高级、干净、真实，photorealistic, commercial product photography, sharp focus, realistic lighting, premium e-commerce image',
+    prompt: '参考图 1，基于图 1 做同风格微改创作。保留产品主体外观、包装设计、Logo/文字/图案、颜色材质比例轮廓不变，不拉伸变形，保留商业摄影质感。调整方向：保留原图审美方向，但改变光线方向、阴影关系和背景细节，如将侧光改为顶光或逆光，调整阴影落点，营造不同氛围感。高级、干净、真实，photorealistic, commercial product photography, sharp focus, realistic lighting, premium e-commerce image',
   },
 ];
 
@@ -44,22 +40,23 @@ export default async function handler(req, res) {
 
   if (!apiKey) return res.status(500).json({ error: 'Missing API key (VECTORENGINE_API_KEY)' });
 
-  async function generateOne({ label, title, prompt }) {
-    const body = {
-      model,
-      prompt,
-      n: 1,
-      size: '1024x1024',
-      image: `data:${mimeType};base64,${imageBase64}`,
-    };
+  const imageBuffer = Buffer.from(imageBase64, 'base64');
+  const ext = mimeType === 'image/png' ? 'png' : mimeType === 'image/webp' ? 'webp' : 'jpg';
+  const imageBlob = new Blob([imageBuffer], { type: mimeType });
 
-    const response = await fetch(`${baseUrl}/v1/images/generations`, {
+  async function generateOne({ label, title, prompt }) {
+    const form = new FormData();
+    form.append('model', model);
+    form.append('prompt', prompt);
+    form.append('n', '1');
+    form.append('size', '1024x1024');
+    form.append('response_format', 'b64_json');
+    form.append('image', imageBlob, `image.${ext}`);
+
+    const response = await fetch(`${baseUrl}/v1/images/edits`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify(body),
+      headers: { Authorization: `Bearer ${apiKey}` },
+      body: form,
     });
 
     if (!response.ok) {
@@ -71,12 +68,11 @@ export default async function handler(req, res) {
     const item = data?.data?.[0];
     if (!item) throw new Error(`[${label}] No image data in response`);
 
-    // 优先用 b64_json，否则 fetch URL 转 base64
     let b64 = item.b64_json;
     if (!b64 && item.url) {
       const imgRes = await fetch(item.url);
-      const buffer = await imgRes.arrayBuffer();
-      b64 = Buffer.from(buffer).toString('base64');
+      const buf = await imgRes.arrayBuffer();
+      b64 = Buffer.from(buf).toString('base64');
     }
     if (!b64) throw new Error(`[${label}] Could not obtain image data`);
 
