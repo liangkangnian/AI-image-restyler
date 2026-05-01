@@ -42,19 +42,44 @@ export default async function handler(req, res) {
   const baseUrl = (process.env.API_BASE_URL || 'https://api.vectorengine.cn').replace(/\/$/, '');
   const model   = process.env.API_MODEL || 'gpt-image-2';
 
-  if (!apiKey) return res.status(500).json({ error: 'Missing API key' });
+  if (!apiKey) return res.status(500).json({ error: 'Missing API key (VECTORENGINE_API_KEY)' });
 
   async function generateOne({ label, title, prompt }) {
-    const body = { model, prompt, n: 1, size: '1024x1024', response_format: { type: 'b64_json' }, image: `data:${mimeType};base64,${imageBase64}` };
+    const body = {
+      model,
+      prompt,
+      n: 1,
+      size: '1024x1024',
+      image: `data:${mimeType};base64,${imageBase64}`,
+    };
+
     const response = await fetch(`${baseUrl}/v1/images/generations`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
       body: JSON.stringify(body),
     });
-    if (!response.ok) throw new Error(`[${label}] API error ${response.status}: ${await response.text()}`);
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`[${label}] API error ${response.status}: ${errText}`);
+    }
+
     const data = await response.json();
-    const b64 = data?.data?.[0]?.b64_json;
-    if (!b64) throw new Error(`[${label}] No image data`);
+    const item = data?.data?.[0];
+    if (!item) throw new Error(`[${label}] No image data in response`);
+
+    // 优先用 b64_json，否则 fetch URL 转 base64
+    let b64 = item.b64_json;
+    if (!b64 && item.url) {
+      const imgRes = await fetch(item.url);
+      const buffer = await imgRes.arrayBuffer();
+      b64 = Buffer.from(buffer).toString('base64');
+    }
+    if (!b64) throw new Error(`[${label}] Could not obtain image data`);
+
     return { label, title, b64 };
   }
 
@@ -62,7 +87,7 @@ export default async function handler(req, res) {
     const results = await Promise.all(PROMPTS.map(generateOne));
     return res.status(200).json({ success: true, images: results });
   } catch (err) {
-    console.error(err);
+    console.error('Generation error:', err);
     return res.status(500).json({ success: false, error: err.message });
   }
 }
