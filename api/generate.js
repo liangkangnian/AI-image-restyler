@@ -4,22 +4,22 @@ const PROMPTS = [
   {
     label: 'A',
     title: '主体位置调整版',
-    prompt: '参考图 1，基于图 1 做同风格微改创作。保留产品主体外观、包装设计、Logo/文字/图案、颜色材质比例轮廓不变，不拉伸变形，保留商业摄影质感。调整方向：将产品移到新的画面位置（如从中央移到左三分之一或右侧），保留整体场景风格和色彩体系，重新设计背景空间关系。高级、干净、真实，适合电商主图，photorealistic, commercial product photography, sharp focus, realistic lighting, premium e-commerce image',
+    prompt: 'Keep the exact product in this image completely unchanged — same shape, packaging, logo, text, colors, and materials. Do not replace or alter the product itself in any way. Only change: reposition the product to the left third of the frame, redesign the background space and composition accordingly while keeping the same overall style and color tone. Result: high-end, clean, photorealistic commercial product photography, sharp focus, realistic lighting, premium e-commerce image.',
   },
   {
     label: 'B',
     title: '道具重组版',
-    prompt: '参考图 1，基于图 1 做同风格微改创作。保留产品主体外观、包装设计、Logo/文字/图案、颜色材质比例轮廓不变，不拉伸变形，保留商业摄影质感。调整方向：重新安排画面中的道具组合与前后景关系，替换或重组装饰元素，改变画面层次感，让构图更丰富但风格一致。高级、干净、真实，photorealistic, commercial product photography, sharp focus, realistic lighting, premium e-commerce image',
+    prompt: 'Keep the exact product in this image completely unchanged — same shape, packaging, logo, text, colors, and materials. Do not replace or alter the product itself in any way. Only change: rearrange the decorative props and foreground/background elements around the product, add or swap styling accessories to create richer composition while keeping a consistent style. Result: high-end, clean, photorealistic commercial product photography, sharp focus, realistic lighting, premium e-commerce image.',
   },
   {
     label: 'C',
     title: '镜头变化版',
-    prompt: '参考图 1，基于图 1 做同风格微改创作。保留产品主体外观、包装设计、Logo/文字/图案、颜色材质比例轮廓不变，不拉伸变形，保留商业摄影质感。调整方向：改变拍摄机位和构图方式，如从正面改为略带俯角或侧角，形成新的视觉重心和透视感，使画面更有张力。高级、干净、真实，photorealistic, commercial product photography, sharp focus, realistic lighting, premium e-commerce image',
+    prompt: 'Keep the exact product in this image completely unchanged — same shape, packaging, logo, text, colors, and materials. Do not replace or alter the product itself in any way. Only change: shift the camera angle to a slight top-down or side perspective instead of straight-on, creating a new visual center of gravity and perspective tension. Result: high-end, clean, photorealistic commercial product photography, sharp focus, realistic lighting, premium e-commerce image.',
   },
   {
     label: 'D',
     title: '光影变化版',
-    prompt: '参考图 1，基于图 1 做同风格微改创作。保留产品主体外观、包装设计、Logo/文字/图案、颜色材质比例轮廓不变，不拉伸变形，保留商业摄影质感。调整方向：保留原图审美方向，但改变光线方向、阴影关系和背景细节，如将侧光改为顶光或逆光，调整阴影落点，营造不同氛围感。高级、干净、真实，photorealistic, commercial product photography, sharp focus, realistic lighting, premium e-commerce image',
+    prompt: 'Keep the exact product in this image completely unchanged — same shape, packaging, logo, text, colors, and materials. Do not replace or alter the product itself in any way. Only change: alter the lighting direction and shadow — switch from side lighting to top or back lighting, adjust where shadows fall to create a different mood and atmosphere. Result: high-end, clean, photorealistic commercial product photography, sharp focus, realistic lighting, premium e-commerce image.',
   },
 ];
 
@@ -40,23 +40,22 @@ export default async function handler(req, res) {
 
   if (!apiKey) return res.status(500).json({ error: 'Missing API key (VECTORENGINE_API_KEY)' });
 
-  const imageBuffer = Buffer.from(imageBase64, 'base64');
-  const ext = mimeType === 'image/png' ? 'png' : mimeType === 'image/webp' ? 'webp' : 'jpg';
-  const imageBlob = new Blob([imageBuffer], { type: mimeType });
-
   async function generateOne({ label, title, prompt }) {
-    const form = new FormData();
-    form.append('model', model);
-    form.append('prompt', prompt);
-    form.append('n', '1');
-    form.append('size', '1024x1024');
-    form.append('response_format', 'b64_json');
-    form.append('image', imageBlob, `image.${ext}`);
+    const body = {
+      model,
+      prompt,
+      n: 1,
+      size: '1024x1024',
+      image: `data:${mimeType};base64,${imageBase64}`,
+    };
 
-    const response = await fetch(`${baseUrl}/v1/images/edits`, {
+    const response = await fetch(`${baseUrl}/v1/images/generations`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}` },
-      body: form,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(body),
     });
 
     if (!response.ok) {
