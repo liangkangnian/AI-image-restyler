@@ -45,7 +45,7 @@ export default async function handler(req, res) {
   if (!apiKey) return res.status(500).json({ error: 'Missing API key' });
 
   async function generateOne({ label, title, prompt }) {
-    const body = { model, prompt, n: 1, size: '1024x1024', response_format: 'b64_json', image: `data:${mimeType};base64,${imageBase64}` };
+    const body = { model, prompt, n: 1, size: '1024x1024', response_format: { type: 'b64_json' }, image: `data:${mimeType};base64,${imageBase64}` };
     const response = await fetch(`${baseUrl}/v1/images/generations`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
