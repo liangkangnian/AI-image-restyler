@@ -28,60 +28,33 @@ const PROMPTS = [
 ];
 
 export default async function handler(req, res) {
-  // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method Not Allowed' });
-  }
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
 
   const { imageBase64, mimeType } = req.body;
+  if (!imageBase64 || !mimeType) return res.status(400).json({ error: 'Missing imageBase64 or mimeType' });
 
-  if (!imageBase64 || !mimeType) {
-    return res.status(400).json({ error: 'Missing imageBase64 or mimeType' });
-  }
+  const apiKey  = process.env.VECTORENGINE_API_KEY || process.env.OPENAI_API_KEY;
+  const baseUrl = (process.env.API_BASE_URL || 'https://api.vectorengine.cn').replace(/\/$/, '');
+  const model   = process.env.API_MODEL || 'gpt-image-2';
 
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    return res.status(500).json({ error: 'Server misconfiguration: missing API key' });
-  }
-
-  const BASE_URL = 'https://api.vectorengine.cn';
+  if (!apiKey) return res.status(500).json({ error: 'Missing API key' });
 
   async function generateOne({ label, title, prompt }) {
-    const body = {
-      model: 'gpt-image-2',
-      prompt,
-      n: 1,
-      size: '1024x1024',
-      response_format: 'b64_json',
-      image: `data:${mimeType};base64,${imageBase64}`,
-    };
-
-    const response = await fetch(`${BASE_URL}/v1/images/generations`, {
+    const body = { model, prompt, n: 1, size: '1024x1024', response_format: 'b64_json', image: `data:${mimeType};base64,${imageBase64}` };
+    const response = await fetch(`${baseUrl}/v1/images/generations`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify(body),
     });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(`[${label}] API error ${response.status}: ${errText}`);
-    }
-
+    if (!response.ok) throw new Error(`[${label}] API error ${response.status}: ${await response.text()}`);
     const data = await response.json();
     const b64 = data?.data?.[0]?.b64_json;
-    if (!b64) throw new Error(`[${label}] No image data in response`);
-
+    if (!b64) throw new Error(`[${label}] No image data`);
     return { label, title, b64 };
   }
 
@@ -89,7 +62,7 @@ export default async function handler(req, res) {
     const results = await Promise.all(PROMPTS.map(generateOne));
     return res.status(200).json({ success: true, images: results });
   } catch (err) {
-    console.error('Generation error:', err);
+    console.error(err);
     return res.status(500).json({ success: false, error: err.message });
   }
 }
