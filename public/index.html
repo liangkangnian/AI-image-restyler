@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI 商品图改图工具</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0d0d0d;
+      --card: #1a1a1a;
+      --border: #2a2a2a;
+      --border-hover: #3d3d3d;
+      --gold: #e8c97a;
+      --gold-dim: rgba(232,201,122,0.12);
+      --gold-hover: #f0d68e;
+      --text: #e8e8e8;
+      --text-dim: #888;
+      --text-muted: #555;
+      --success: #4caf88;
+      --error: #e07070;
+      --radius: 12px;
+      --radius-sm: 8px;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Noto Sans SC', 'PingFang SC', sans-serif;
+      font-size: 14px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Layout ── */
+    .layout {
+      display: flex;
+      min-height: 100vh;
+    }
+
+    /* ── Left Panel ── */
+    .left-panel {
+      width: 400px;
+      flex-shrink: 0;
+      background: var(--card);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      padding: 32px 28px;
+      gap: 24px;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+    }
+
+    /* Logo */
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .logo-icon {
+      width: 36px;
+      height: 36px;
+      background: var(--gold-dim);
+      border: 1px solid rgba(232,201,122,0.3);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+    }
+    .logo-text {
+      display: flex;
+      flex-direction: column;
+    }
+    .logo-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+      letter-spacing: 0.02em;
+    }
+    .logo-sub {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+      letter-spacing: 0.04em;
+    }
+
+    /* Divider */
+    .divider {
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* Upload Zone */
+    .upload-section { display: flex; flex-direction: column; gap: 10px; }
+    .upload-label {
+      font-size: 12px;
+      color: var(--text-dim);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      font-weight: 500;
+    }
+
+    .drop-zone {
+      border: 1.5px dashed var(--border);
+      border-radius: var(--radius);
+      min-height: 220px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+    .drop-zone:hover, .drop-zone.drag-over {
+      border-color: var(--gold);
+      background: var(--gold-dim);
+    }
+    .drop-zone input[type=file] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+      width: 100%;
+      height: 100%;
+    }
+    .drop-icon { font-size: 32px; opacity: 0.5; }
+    .drop-text { font-size: 13px; color: var(--text-dim); text-align: center; line-height: 1.8; }
+    .drop-formats {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--text-muted);
+      background: rgba(255,255,255,0.04);
+      padding: 3px 10px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+    }
+
+    /* Preview inside drop zone */
+    .preview-img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      position: absolute;
+      inset: 0;
+    }
+    .preview-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,0.55);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    .drop-zone:hover .preview-overlay { opacity: 1; }
+    .preview-overlay span { font-size: 12px; color: #fff; }
+
+    /* File info */
+    .file-info {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+    }
+    .file-info.visible { display: flex; }
+    .file-info-icon { font-size: 16px; }
+    .file-info-text { flex: 1; min-width: 0; }
+    .file-info-name {
+      font-size: 12px;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .file-info-size { font-size: 11px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; }
+
+    /* Generate Button */
+    .btn-generate {
+      width: 100%;
+      padding: 14px;
+      background: var(--gold);
+      color: #0d0d0d;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 14px;
+      font-weight: 600;
+      font-family: 'Noto Sans SC', sans-serif;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: background 0.2s, transform 0.1s, opacity 0.2s;
+      letter-spacing: 0.02em;
+    }
+    .btn-generate:hover:not(:disabled) { background: var(--gold-hover); }
+    .btn-generate:active:not(:disabled) { transform: scale(0.98); }
+    .btn-generate:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    /* Spinner */
+    .spinner {
+      width: 16px; height: 16px;
+      border: 2px solid rgba(0,0,0,0.2);
+      border-top-color: #0d0d0d;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      display: none;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Progress hint */
+    .progress-hint {
+      min-height: 18px;
+      font-size: 12px;
+      color: var(--gold);
+      font-family: 'JetBrains Mono', monospace;
+      text-align: center;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    .progress-hint.visible { opacity: 1; }
+
+    /* Rules note */
+    .rules-note {
+      padding: 14px;
+      background: rgba(255,255,255,0.025);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .rules-note-title {
+      font-size: 11px;
+      color: var(--text-muted);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      font-weight: 500;
+    }
+    .rules-note-items {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    .rules-note-item {
+      font-size: 12px;
+      color: var(--text-dim);
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+    }
+    .rules-note-item::before {
+      content: '·';
+      color: var(--gold);
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    /* Directions legend */
+    .directions-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .direction-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 12px;
+      color: var(--text-dim);
+    }
+    .dir-badge {
+      width: 22px; height: 22px;
+      border-radius: 6px;
+      background: rgba(232,201,122,0.1);
+      border: 1px solid rgba(232,201,122,0.25);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--gold);
+      flex-shrink: 0;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* ── Right Panel ── */
+    .right-panel {
+      flex: 1;
+      padding: 32px 36px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      min-width: 0;
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .panel-title {
+      font-size: 16px;
+      font-weight: 500;
+      color: var(--text);
+    }
+    .panel-subtitle {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Result Grid */
+    .result-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    .result-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .card-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card-badge {
+      width: 24px; height: 24px;
+      background: var(--gold-dim);
+      border: 1px solid rgba(232,201,122,0.3);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--gold);
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .card-title {
+      font-size: 13px;
+      color: var(--text);
+      flex: 1;
+    }
+
+    .card-body {
+      position: relative;
+      aspect-ratio: 1 / 1;
+      background: #111;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    /* Skeleton / placeholder */
+    .skeleton {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+    .skeleton-icon { font-size: 28px; opacity: 0.15; }
+    .skeleton-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+      letter-spacing: 0.06em;
+    }
+
+    /* Shimmer */
+    .shimmer {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, #1a1a1a 25%, #222 50%, #1a1a1a 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.4s infinite;
+      display: none;
+    }
+    .shimmer.active { display: block; }
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    /* Result image */
+    .result-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: none;
+    }
+    .result-img.loaded { display: block; }
+
+    /* Download hover overlay */
+    .dl-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      transition: opacity 0.2s;
+      pointer-events: none;
+    }
+    .card-body:hover .dl-overlay { opacity: 1; pointer-events: auto; }
+    .dl-btn-overlay {
+      padding: 10px 20px;
+      background: var(--gold);
+      color: #0d0d0d;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: 'Noto Sans SC', sans-serif;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.15s;
+    }
+    .dl-btn-overlay:hover { background: var(--gold-hover); }
+    .dl-btn-overlay:disabled { display: none; }
+
+    /* Card footer with persistent download button */
+    .card-footer {
+      padding: 10px 14px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+    }
+    .dl-btn-footer {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 16px;
+      background: transparent;
+      color: var(--text-dim);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      font-family: 'Noto Sans SC', sans-serif;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+    }
+    .dl-btn-footer:hover:not(:disabled) {
+      color: var(--gold);
+      border-color: rgba(232,201,122,0.4);
+      background: var(--gold-dim);
+    }
+    .dl-btn-footer:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+    .dl-btn-footer svg { flex-shrink: 0; }
+
+    /* Download All button */
+    .btn-dl-all {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 8px 18px;
+      background: transparent;
+      color: var(--text-dim);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      font-family: 'Noto Sans SC', sans-serif;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+      white-space: nowrap;
+    }
+    .btn-dl-all:hover:not(:disabled) {
+      color: var(--gold);
+      border-color: rgba(232,201,122,0.45);
+      background: var(--gold-dim);
+    }
+    .btn-dl-all:disabled { opacity: 0.3; cursor: not-allowed; }
+
+    /* ── Toast ── */
+    .toast-container {
+      position: fixed;
+      bottom: 32px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      pointer-events: none;
+    }
+    .toast {
+      padding: 10px 20px;
+      border-radius: 100px;
+      font-size: 13px;
+      font-weight: 500;
+      animation: toast-in 0.25s ease, toast-out 0.3s ease 1.7s forwards;
+      pointer-events: none;
+      max-width: 360px;
+      text-align: center;
+    }
+    .toast.info { background: #2a2a2a; color: var(--text); border: 1px solid var(--border); }
+    .toast.error { background: #2e1a1a; color: var(--error); border: 1px solid rgba(224,112,112,0.3); }
+    .toast.success { background: #172820; color: var(--success); border: 1px solid rgba(76,175,136,0.3); }
+    @keyframes toast-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes toast-out { from { opacity: 1; } to { opacity: 0; transform: translateY(6px); } }
+
+    /* Responsive */
+    @media (max-width: 900px) {
+      .layout { flex-direction: column; }
+      .left-panel { width: 100%; height: auto; position: static; }
+      .right-panel { padding: 20px; }
+      .result-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="layout">
+  <!-- ───────── LEFT PANEL ───────── -->
+  <aside class="left-panel">
+
+    <!-- Logo -->
+    <div class="logo">
+      <div class="logo-icon">✦</div>
+      <div class="logo-text">
+        <span class="logo-title">AI 商品图改图工具</span>
+        <span class="logo-sub">IMAGE · RESTYLER · v1.0</span>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Upload -->
+    <div class="upload-section">
+      <span class="upload-label">上传原图</span>
+
+      <div class="drop-zone" id="dropZone">
+        <input type="file" id="fileInput" accept="image/jpeg,image/png,image/webp" />
+        <img class="preview-img" id="previewImg" style="display:none" />
+        <div class="preview-overlay" id="previewOverlay" style="display:none">
+          <span>🔄</span>
+          <span>点击更换图片</span>
+        </div>
+        <div id="dropPlaceholder" style="display:flex;flex-direction:column;align-items:center;gap:12px">
+          <div class="drop-icon">🖼️</div>
+          <div class="drop-text">拖拽图片到此处<br>或点击选择文件</div>
+          <div class="drop-formats">JPG · PNG · WEBP</div>
+        </div>
+      </div>
+
+      <div class="file-info" id="fileInfo">
+        <span class="file-info-icon">📄</span>
+        <div class="file-info-text">
+          <div class="file-info-name" id="fileName">—</div>
+          <div class="file-info-size" id="fileSize">—</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Button -->
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <button class="btn-generate" id="btnGenerate" disabled>
+        <div class="spinner" id="spinner"></div>
+        <span id="btnText">✦ 开始生成 4 张改图</span>
+      </button>
+      <div class="progress-hint" id="progressHint">正在并行生成 A · B · C · D …</div>
+    </div>
+
+    <!-- Rules -->
+    <div class="rules-note">
+      <span class="rules-note-title">内置生成规则</span>
+      <div class="rules-note-items">
+        <div class="rules-note-item">产品外观、Logo、文字、配色完全保留</div>
+        <div class="rules-note-item">4 张图并行生成，速度更快</div>
+        <div class="rules-note-item">每张改变不同维度：位置 / 道具 / 镜头 / 光影</div>
+        <div class="rules-note-item">适合电商主图直接使用</div>
+      </div>
+    </div>
+
+    <!-- Directions -->
+    <div class="divider"></div>
+    <div class="directions-list">
+      <div class="direction-item"><div class="dir-badge">A</div>主体位置调整版</div>
+      <div class="direction-item"><div class="dir-badge">B</div>道具重组版</div>
+      <div class="direction-item"><div class="dir-badge">C</div>镜头变化版</div>
+      <div class="direction-item"><div class="dir-badge">D</div>光影变化版</div>
+    </div>
+
+  </aside>
+
+  <!-- ───────── RIGHT PANEL ───────── -->
+  <main class="right-panel">
+    <div class="panel-header">
+      <div style="display:flex;flex-direction:column;gap:2px">
+        <span class="panel-title">生成结果</span>
+        <span class="panel-subtitle" id="statusText">等待上传图片</span>
+      </div>
+      <button class="btn-dl-all" id="btnDlAll" disabled>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/>
+          <line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        一键下载全部
+      </button>
+    </div>
+
+    <div class="result-grid" id="resultGrid">
+      <!-- Cards rendered by JS -->
+    </div>
+  </main>
+</div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+  const DIRECTIONS = [
+    { label: 'A', title: '主体位置调整版' },
+    { label: 'B', title: '道具重组版' },
+    { label: 'C', title: '镜头变化版' },
+    { label: 'D', title: '光影变化版' },
+  ];
+
+  /* ── State ── */
+  let fileBase64 = null;
+  let fileMime = null;
+  let blobUrls = {};
+
+  /* ── DOM refs ── */
+  const dropZone       = document.getElementById('dropZone');
+  const fileInput      = document.getElementById('fileInput');
+  const previewImg     = document.getElementById('previewImg');
+  const previewOverlay = document.getElementById('previewOverlay');
+  const dropPlaceholder= document.getElementById('dropPlaceholder');
+  const fileInfo       = document.getElementById('fileInfo');
+  const fileName       = document.getElementById('fileName');
+  const fileSize       = document.getElementById('fileSize');
+  const btnGenerate    = document.getElementById('btnGenerate');
+  const btnText        = document.getElementById('btnText');
+  const spinner        = document.getElementById('spinner');
+  const progressHint   = document.getElementById('progressHint');
+  const resultGrid     = document.getElementById('resultGrid');
+  const statusText     = document.getElementById('statusText');
+  const toastContainer = document.getElementById('toastContainer');
+  const btnDlAll       = document.getElementById('btnDlAll');
+
+  /* ── Build result cards ── */
+  function buildCards() {
+    resultGrid.innerHTML = '';
+    DIRECTIONS.forEach(({ label, title }) => {
+      const card = document.createElement('div');
+      card.className = 'result-card';
+      card.id = `card-${label}`;
+      card.innerHTML = `
+        <div class="card-header">
+          <div class="card-badge">${label}</div>
+          <span class="card-title">${title}</span>
+        </div>
+        <div class="card-body" id="body-${label}">
+          <div class="shimmer" id="shimmer-${label}"></div>
+          <div class="skeleton" id="skeleton-${label}">
+            <div class="skeleton-icon">✦</div>
+            <div class="skeleton-label">DIRECTION · ${label}</div>
+          </div>
+          <img class="result-img" id="img-${label}" alt="${title}" />
+          <div class="dl-overlay" id="overlay-${label}">
+            <button class="dl-btn-overlay" id="dl-overlay-${label}" disabled>⬇ 下载此图</button>
+          </div>
+        </div>
+        <div class="card-footer">
+          <button class="dl-btn-footer" id="dl-${label}" disabled>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            下载 ${label}
+          </button>
+        </div>
+      `;
+      resultGrid.appendChild(card);
+    });
+  }
+  buildCards();
+
+  /* ── File handling ── */
+  function formatBytes(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / 1024 / 1024).toFixed(2) + ' MB';
+  }
+
+  function loadFile(file) {
+    if (!file) return;
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      showToast('仅支持 JPG / PNG / WEBP 格式', 'error');
+      return;
+    }
+
+    fileMime = file.type;
+    fileName.textContent = file.name;
+    fileSize.textContent = formatBytes(file.size);
+    fileInfo.classList.add('visible');
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target.result;
+      fileBase64 = dataUrl.split(',')[1];
+      previewImg.src = dataUrl;
+      previewImg.style.display = 'block';
+      previewOverlay.style.display = 'flex';
+      dropPlaceholder.style.display = 'none';
+      btnGenerate.disabled = false;
+      statusText.textContent = '图片已就绪，可开始生成';
+    };
+    reader.readAsDataURL(file);
+  }
+
+  fileInput.addEventListener('change', (e) => loadFile(e.target.files[0]));
+
+  dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    loadFile(e.dataTransfer.files[0]);
+  });
+
+  /* ── Generate ── */
+  btnGenerate.addEventListener('click', async () => {
+    if (!fileBase64) return;
+
+    // Revoke old blob URLs
+    Object.values(blobUrls).forEach(URL.revokeObjectURL);
+    blobUrls = {};
+
+    // Reset cards to loading state
+    btnDlAll.disabled = true;
+    DIRECTIONS.forEach(({ label }) => {
+      document.getElementById(`img-${label}`).classList.remove('loaded');
+      document.getElementById(`img-${label}`).src = '';
+      document.getElementById(`shimmer-${label}`).classList.add('active');
+      document.getElementById(`skeleton-${label}`).style.display = 'flex';
+      document.getElementById(`dl-${label}`).disabled = true;
+      const dlOverlayBtn = document.getElementById(`dl-overlay-${label}`);
+      if (dlOverlayBtn) dlOverlayBtn.disabled = true;
+    });
+
+    setLoading(true);
+    statusText.textContent = '生成中…';
+
+    try {
+      const res = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64: fileBase64, mimeType: fileMime }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || `HTTP ${res.status}`);
+      }
+
+      data.images.forEach(({ label, b64 }) => {
+        const byteChars = atob(b64);
+        const byteArr = new Uint8Array(byteChars.length);
+        for (let i = 0; i < byteChars.length; i++) byteArr[i] = byteChars.charCodeAt(i);
+        const blob = new Blob([byteArr], { type: 'image/png' });
+        const url = URL.createObjectURL(blob);
+        blobUrls[label] = url;
+
+        const imgEl = document.getElementById(`img-${label}`);
+        imgEl.onload = () => {
+          document.getElementById(`shimmer-${label}`).classList.remove('active');
+          document.getElementById(`skeleton-${label}`).style.display = 'none';
+          imgEl.classList.add('loaded');
+          // Footer button
+          const dlBtn = document.getElementById(`dl-${label}`);
+          dlBtn.disabled = false;
+          dlBtn.onclick = () => downloadImage(url, `改图-${label}.png`);
+          // Overlay button
+          const dlOverlayBtn = document.getElementById(`dl-overlay-${label}`);
+          if (dlOverlayBtn) {
+            dlOverlayBtn.disabled = false;
+            dlOverlayBtn.onclick = () => downloadImage(url, `改图-${label}.png`);
+          }
+          // Enable "download all" once at least one image is ready
+          const anyReady = DIRECTIONS.some(d => blobUrls[d.label]);
+          if (anyReady) btnDlAll.disabled = false;
+        };
+        imgEl.src = url;
+      });
+
+      statusText.textContent = `生成完成 · ${data.images.length} 张`;
+      showToast('4 张改图生成完成 ✦', 'success');
+
+    } catch (err) {
+      console.error(err);
+      statusText.textContent = '生成失败';
+      showToast('生成失败：' + err.message, 'error');
+      DIRECTIONS.forEach(({ label }) => {
+        document.getElementById(`shimmer-${label}`).classList.remove('active');
+      });
+    } finally {
+      setLoading(false);
+    }
+  });
+
+  function setLoading(on) {
+    btnGenerate.disabled = on || !fileBase64;
+    spinner.style.display = on ? 'block' : 'none';
+    btnText.textContent = on ? '生成中…' : '✦ 开始生成 4 张改图';
+    progressHint.classList.toggle('visible', on);
+  }
+
+  function downloadImage(url, name) {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    a.click();
+  }
+
+  /* ── Download All ── */
+  async function downloadAll() {
+    const available = DIRECTIONS.filter(d => blobUrls[d.label]);
+    if (available.length === 0) return;
+
+    showToast(`正在下载 ${available.length} 张图片…`, 'info');
+
+    // Stagger downloads slightly so browsers don't block them
+    for (let i = 0; i < available.length; i++) {
+      const { label } = available[i];
+      await new Promise(resolve => setTimeout(resolve, i * 300));
+      downloadImage(blobUrls[label], `改图-${label}.png`);
+    }
+  }
+
+  btnDlAll.addEventListener('click', downloadAll);
+
+  /* ── Toast ── */
+  function showToast(msg, type = 'info') {
+    const el = document.createElement('div');
+    el.className = `toast ${type}`;
+    el.textContent = msg;
+    toastContainer.appendChild(el);
+    setTimeout(() => el.remove(), 2100);
+  }
+</script>
+</body>
+</html>
