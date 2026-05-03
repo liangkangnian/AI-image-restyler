@@ -41,21 +41,23 @@ export default async function handler(req, res) {
   if (!apiKey) return res.status(500).json({ error: 'Missing API key (VECTORENGINE_API_KEY)' });
 
   async function generateOne({ label, title, prompt }) {
-    const body = {
-      model,
-      prompt,
-      n: 1,
-      size: '1024x1024',
-      image: `data:${mimeType};base64,${imageBase64}`,
-    };
+    const bytes = Buffer.from(imageBase64, 'base64');
+    const blob = new Blob([bytes], { type: mimeType });
+    const formData = new FormData();
 
-    const response = await fetch(`${baseUrl}/v1/images/generations`, {
+    // 使用编辑接口，确保模型把上传图当作“必须参考”的源图。
+    formData.append('model', model);
+    formData.append('prompt', `${prompt}\n\nMandatory constraints: preserve the exact same main product identity from the provided source image.`);
+    formData.append('n', '1');
+    formData.append('size', '1024x1024');
+    formData.append('image', blob, `source.${mimeType.split('/')[1] || 'png'}`);
+
+    const response = await fetch(`${baseUrl}/v1/images/edits`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
         Authorization: `Bearer ${apiKey}`,
       },
-      body: JSON.stringify(body),
+      body: formData,
     });
 
     if (!response.ok) {
